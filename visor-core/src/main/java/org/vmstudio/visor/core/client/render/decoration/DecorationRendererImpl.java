@@ -1,5 +1,6 @@
 package org.vmstudio.visor.core.client.render.decoration;
 
+import org.vmstudio.visor.api.compatibility.mcversion.render.McFog;
 import org.vmstudio.visor.api.compatibility.mcversion.render.McGlState;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.vmstudio.visor.api.compatibility.mcversion.render.McModelViewStack;
@@ -35,6 +36,7 @@ import org.vmstudio.visor.core.client.render.helpers.RenderEffectsHelper;
 import org.vmstudio.visor.api.client.settings.VRClientSettings;
 import org.vmstudio.visor.api.client.settings.enums.MirrorMode;
 import org.vmstudio.visor.core.client.render.camera.VRCameraOverlaps;
+import org.vmstudio.visor.extensions.client.render.GameRendererExtension;
 
 import java.util.List;
 
@@ -56,6 +58,9 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
 
     private HandRenderState handStateMain = HandRenderState.OFF;
     private HandRenderState handStateOffhand = HandRenderState.OFF;
+
+    private boolean handEffectsShaderFix;
+    private boolean worldEffectsShaderFix;
 
     public DecorationRendererImpl(){
         this.registry = new DecoratorRegistry();
@@ -281,7 +286,8 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
         currentDecorator.setupRendering(poseStack, partialTicks);
 
         McGlState.turnOffLightLayer();
-        if (!ShaderCompatHelper.isShaderActive()) {
+        boolean shaderActive = ShaderCompatHelper.isShaderActive();
+        if (!shaderActive) {
             ClientContext.guiManager.renderDepthOverlays(poseStack, partialTicks);
         }
         //VR BODY
@@ -289,13 +295,11 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
                 .getBodyType()
                 .getRenderer()
                 .renderDecoration(currentDecorator, poseStack, partialTicks);
-        ClientContext.handRenderer.renderHandEffectsOnly(
-                currentDecorator,
-                poseStack,
-                handStateMain, handStateOffhand,
-                false,
-                partialTicks
-        );
+        if (shaderActive) {
+            handEffectsShaderFix = true;
+        } else {
+            renderWorldHandEffects(poseStack, partialTicks);
+        }
         currentDecorator.renderAfterSolid(poseStack, partialTicks);
 
         GLUtils.checkGLError("post AFTER_SOLID stage");
@@ -317,9 +321,10 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
     private void renderAfterWorld(PoseStack poseStack, float partialTicks) {
         if (currentDecorator == null) return;
 
+        boolean shaderActive = ShaderCompatHelper.isShaderActive();
         // a foreign AFTER_LEVEL listener can leave the default framebuffer bound
         // (RenderTarget.copyDepthFrom does), iris rebinds the eye target itself
-        if (!ShaderCompatHelper.isShaderActive()) {
+        if (!shaderActive) {
             McRenderTarget.bindWrite(McRenderTarget.mainTarget());
         }
 
@@ -328,6 +333,27 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
             return;
         }
 
+        if (shaderActive) {
+            worldEffectsShaderFix = true;
+        } else {
+            renderWorldEffects(poseStack, partialTicks);
+        }
+        currentDecorator.renderAfterWorld(poseStack, partialTicks);
+
+        GLUtils.checkGLError("post AFTER_WORLD stage");
+    }
+
+    private void renderWorldHandEffects(PoseStack poseStack, float partialTicks) {
+        ClientContext.handRenderer.renderHandEffectsOnly(
+                currentDecorator,
+                poseStack,
+                handStateMain, handStateOffhand,
+                false,
+                partialTicks
+        );
+    }
+
+    private void renderWorldEffects(PoseStack poseStack, float partialTicks) {
         // In-block dimming
         if (MC.level != null) {
             if (VRRenderState.getRenderPass().isFirstPerson()) {
@@ -343,9 +369,6 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
         }
 
         renderGameEffects(currentDecorator, poseStack, partialTicks);
-        currentDecorator.renderAfterWorld(poseStack, partialTicks);
-
-        GLUtils.checkGLError("post AFTER_WORLD stage");
     }
 
     public void renderAfterPostProcessing(PoseStack poseStack, float partialTicks) {
@@ -374,10 +397,29 @@ public class DecorationRendererImpl implements VRDecorationRenderer {
     }
 
     public void renderShaderUi(PoseStack poseStack, float partialTicks) {
+        boolean handEffects = handEffectsShaderFix;
+        boolean worldEffects = worldEffectsShaderFix;
+        handEffectsShaderFix = false;
+        worldEffectsShaderFix = false;
         if (currentDecorator == null || currentDecorator.isFullControl()) {
             return;
         }
         ClientContext.guiManager.renderDepthOverlays(poseStack, partialTicks);
+
+        if (handEffects || worldEffects) {
+            ((GameRendererExtension) MC.gameRenderer).visor$resetProjectionMatrix(partialTicks);
+            McFog.State fog = McFog.save();
+            McFog.disable();
+            runLevelStage(() -> {
+                if (handEffects) {
+                    renderWorldHandEffects(poseStack, partialTicks);
+                }
+                if (worldEffects) {
+                    renderWorldEffects(poseStack, partialTicks);
+                }
+            });
+            McFog.restore(fog);
+        }
         GLUtils.checkGLError("post shader UI stage");
     }
 
