@@ -17,7 +17,7 @@ import java.util.List;
  */
 @Getter
 public class RegisterHandTrackersVREvent extends VREvent {
-    private final List<XRHandsProvider> providers;
+    private final ArrayList<XRHandsProvider> providers;
 
     public RegisterHandTrackersVREvent(@NotNull List<XRHandsProvider> providers){
         super(VisorAPI.addonManager().getCoreAddon());

@@ -17,7 +17,7 @@ import java.util.List;
  */
 @Getter
 public class RegisterBodyHapticsVREvent extends VREvent {
-    private final List<XRBodyHapticsProvider> providers;
+    private final ArrayList<XRBodyHapticsProvider> providers;
 
     public RegisterBodyHapticsVREvent(@NotNull List<XRBodyHapticsProvider> providers){
         super(VisorAPI.addonManager().getCoreAddon());
