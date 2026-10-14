@@ -17,7 +17,7 @@ import java.util.List;
  */
 @Getter
 public class RegisterTreadmillsVREvent extends VREvent {
-    private final ArrayList<XRTreadmillProvider> providers;
+    private final List<XRTreadmillProvider> providers;
 
     public RegisterTreadmillsVREvent(@NotNull List<XRTreadmillProvider> providers){
         super(VisorAPI.addonManager().getCoreAddon());

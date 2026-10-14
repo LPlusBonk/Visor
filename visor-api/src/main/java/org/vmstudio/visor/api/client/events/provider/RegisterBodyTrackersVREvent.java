@@ -17,7 +17,7 @@ import java.util.List;
  */
 @Getter
 public class RegisterBodyTrackersVREvent extends VREvent {
-    private final ArrayList<AtumVRBodyView> providers;
+    private final List<AtumVRBodyView> providers;
 
     public RegisterBodyTrackersVREvent(@NotNull List<AtumVRBodyView> providers){
         super(VisorAPI.addonManager().getCoreAddon());
